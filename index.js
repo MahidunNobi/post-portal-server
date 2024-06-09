@@ -5,6 +5,7 @@ require("dotenv").config();
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 
 // middleware
 app.use(express.json());
@@ -14,6 +15,7 @@ app.use(
     credentials: true,
   })
 );
+app.use(cookieParser());
 
 app.get("/", (req, res) => {
   res.send("Post pulse server is going on here....");
@@ -40,6 +42,33 @@ async function run() {
 
     const userCollection = client.db("post-portal").collection("users");
 
+    // middlewares
+
+    const verifyToken = async (req, res, next) => {
+      const token = req.cookies.token;
+      if (!token) {
+        return res.status(401).send({ message: "Unauthrized access!" });
+      }
+      jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+        if (err) {
+          console.log(err);
+          return res.status(401).send({ message: "Unauthrized access!" });
+        }
+        req.user = decoded;
+        next();
+      });
+    };
+
+    const verifyAdmin = async (req, res, next) => {
+      const user = req.user;
+      const query = { email: user?.email };
+      const userResult = await userCollection.findOne(query);
+      if (!userResult || userResult.role !== "admin") {
+        return res.status(401).send({ message: "Unauthorized access!" });
+      }
+      next();
+    };
+
     // jwt related token
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -55,6 +84,12 @@ async function run() {
     });
 
     // User related api's
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+      const cursor = userCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       const query = { email: user.email };
@@ -64,10 +99,18 @@ async function run() {
       }
       const result = await userCollection.insertOne({
         ...user,
+        subscription: "Bronze",
         timestamp: Date.now(),
       });
       res.send(result);
     });
+    app.get("/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await userCollection.findOne({ email });
+      res.send(result);
+    });
+
+    // app.get("/user-by-name/:name", async())
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
