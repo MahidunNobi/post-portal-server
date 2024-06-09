@@ -41,9 +41,9 @@ async function run() {
     await client.connect();
 
     const userCollection = client.db("post-portal").collection("users");
+    const tagCollection = client.db("post-portal").collection("tags");
 
     // middlewares
-
     const verifyToken = async (req, res, next) => {
       const token = req.cookies.token;
       if (!token) {
@@ -83,8 +83,27 @@ async function run() {
         .send({ success: true });
     });
 
+    // Posts Related api
+    app.post("/posts", verifyToken, async (req, res) => {
+      const post = req.body;
+      console.log(post);
+      res.send(post);
+    });
+
+    // Tags related api
+    app.get("/tags", async (req, res) => {
+      const result = await tagCollection.find().toArray();
+      res.send(result);
+    });
+
     // User related api's
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+      const query = req.query;
+      // if (query) {
+      //   const cursor = userCollection.find({ $text: { $search: query.name } });
+      //   const result = await cursor.toArray();
+      //   return res.send(result);
+      // }
       const cursor = userCollection.find();
       const result = await cursor.toArray();
       res.send(result);
@@ -107,6 +126,18 @@ async function run() {
     app.get("/user/:email", async (req, res) => {
       const email = req.params.email;
       const result = await userCollection.findOne({ email });
+      res.send(result);
+    });
+
+    app.post("/user-role", async (req, res) => {
+      const user = req.body;
+      const filter = { email: user.email };
+      const updateDoc = {
+        $set: { role: user.role },
+      };
+
+      const result = await userCollection.updateOne(filter, updateDoc);
+
       res.send(result);
     });
 
