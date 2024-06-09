@@ -19,6 +19,11 @@ app.get("/", (req, res) => {
   res.send("Post pulse server is going on here....");
 });
 
+const cookieOption = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(process.env.MONGODB_URI, {
   serverApi: {
@@ -41,13 +46,12 @@ async function run() {
       const token = jwt.sign(user, process.env.JWT_SECRET, {
         expiresIn: "1hr",
       });
+      res.cookie("token", token, cookieOption).send({ succcess: true });
+    });
+    app.get("/logout", (req, res) => {
       res
-        .cookie("token", token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-        })
-        .send({ succcess: true });
+        .clearCookie("token", { ...cookieOption, maxAge: 0 })
+        .send({ success: true });
     });
 
     // User related api's
