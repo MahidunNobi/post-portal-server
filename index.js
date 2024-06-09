@@ -84,7 +84,75 @@ async function run() {
         .send({ success: true });
     });
 
+    // {
+    //   $lookup: {
+    //     from: "users",
+    //     localField: "user_id",
+    //     foreignField: "_id",
+    //     as: "user",
+    //   },
+    // },
     // Posts Related api
+    app.get("/posts", async (req, res) => {
+      const result = await postCollection
+        .aggregate([
+          // Extraticking the user
+          {
+            $addFields: {
+              user_id: { $toObjectId: "$user_id" },
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "user_id",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          {
+            $unwind: "$user",
+          },
+          // extracting selected tages
+          {
+            $unwind: "$selectedTags",
+          },
+          {
+            $addFields: {
+              selectedTags: { $toObjectId: "$selectedTags" },
+            },
+          },
+          {
+            $lookup: {
+              from: "tags",
+              localField: "selectedTags",
+              foreignField: "_id",
+              as: "selectedTags",
+            },
+          },
+          {
+            $unwind: "$selectedTags",
+          },
+          {
+            $group: {
+              _id: "$_id",
+              user_name: { $first: "$user_name" },
+              user_email: { $first: "$user_email" },
+              post_title: { $first: "$post_title" },
+              post_description: { $first: "$post_description" },
+              selectedTags: { $push: "$selectedTags" },
+              user_id: { $first: "$user_id" },
+              user: { $first: "$user" },
+              votes: { $first: "$votes" },
+              comments: { $first: "$comments" },
+              posted: { $first: "$posted" },
+            },
+          },
+        ])
+        .toArray();
+      res.send(result);
+    });
+
     app.post("/posts", verifyToken, async (req, res) => {
       const post = req.body;
       const user = await userCollection.findOne({ email: post.user_email });
@@ -96,6 +164,7 @@ async function run() {
         selectedTags,
         votes: 0,
         comments: [],
+        posted: Date.now(),
       };
       const result = await postCollection.insertOne(finalPost);
       res.send(result);
@@ -122,6 +191,7 @@ async function run() {
 
     app.post("/users", async (req, res) => {
       const user = req.body;
+      console.log(user);
       const query = { email: user.email };
       const existingUser = await userCollection.findOne(query);
       if (existingUser) {
