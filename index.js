@@ -42,6 +42,7 @@ async function run() {
 
     const userCollection = client.db("post-portal").collection("users");
     const tagCollection = client.db("post-portal").collection("tags");
+    const postCollection = client.db("post-portal").collection("posts");
 
     // middlewares
     const verifyToken = async (req, res, next) => {
@@ -86,8 +87,18 @@ async function run() {
     // Posts Related api
     app.post("/posts", verifyToken, async (req, res) => {
       const post = req.body;
-      console.log(post);
-      res.send(post);
+      const user = await userCollection.findOne({ email: post.user_email });
+      const selectedTags = post.selectedTags.map((tag) => tag._id);
+
+      const finalPost = {
+        ...post,
+        user_id: user._id.toString(),
+        selectedTags,
+        votes: 0,
+        comments: [],
+      };
+      const result = await postCollection.insertOne(finalPost);
+      res.send(result);
     });
 
     // Tags related api
