@@ -43,6 +43,7 @@ async function run() {
     const userCollection = client.db("post-portal").collection("users");
     const tagCollection = client.db("post-portal").collection("tags");
     const postCollection = client.db("post-portal").collection("posts");
+    const commentCollection = client.db("post-portal").collection("comments");
 
     // middlewares
     const verifyToken = async (req, res, next) => {
@@ -144,7 +145,6 @@ async function run() {
         .toArray();
       res.send(result);
     });
-
     app.get("/post/:id", async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
@@ -220,11 +220,56 @@ async function run() {
         ...post,
         user_id: user._id.toString(),
         selectedTags,
-        votes: 0,
+        upvotes: [],
+        downvotes: [],
         comments: [],
         posted: Date.now(),
       };
       const result = await postCollection.insertOne(finalPost);
+      res.send(result);
+    });
+
+    // Comments related api
+    app.get("/comments/:postId", async (req, res) => {
+      const { postId } = req.params;
+      const query = { post_id: postId };
+      const result = await commentCollection
+        .aggregate([
+          {
+            $match: query,
+          },
+          // {
+          //   $addFields: {
+          //     user_id: { $toObjectId: "$user_id" },
+          //   },
+          // },
+          {
+            $lookup: {
+              from: "users",
+              localField: "user_email",
+              foreignField: "email",
+              as: "user",
+            },
+          },
+          {
+            $unwind: "$user",
+          },
+        ])
+        .toArray();
+      res.send(result);
+    });
+    app.post("/comments", verifyToken, async (req, res) => {
+      const comment = req.body;
+      const result = await commentCollection.insertOne(comment);
+
+      // Saving the comment Id to the post collecetion
+      const query = { _id: new ObjectId(comment.post_id) };
+      const updateDoc = {
+        $push: {
+          comments: result._id,
+        },
+      };
+      const postResult = await postCollection.updateOne(query, updateDoc);
       res.send(result);
     });
 
