@@ -136,10 +136,14 @@ async function run() {
               selectedTags: { $push: "$selectedTags" },
               user_id: { $first: "$user_id" },
               user: { $first: "$user" },
-              votes: { $first: "$votes" },
+              upvotes: { $first: "$upvotes" },
+              downvotes: { $first: "$downvotes" },
               comments: { $first: "$comments" },
               posted: { $first: "$posted" },
             },
+          },
+          {
+            $sort: { posted: -1 },
           },
         ])
         .toArray();
@@ -200,7 +204,8 @@ async function run() {
               selectedTags: { $push: "$selectedTags" },
               user_id: { $first: "$user_id" },
               user: { $first: "$user" },
-              votes: { $first: "$votes" },
+              upvotes: { $first: "$upvotes" },
+              downvotes: { $first: "$downvotes" },
               comments: { $first: "$comments" },
               posted: { $first: "$posted" },
             },
@@ -229,6 +234,31 @@ async function run() {
       res.send(result);
     });
 
+    // Votes related api
+    app.post("/votes/:postId", async (req, res) => {
+      const { postId } = req.params;
+      const voteDetails = req.body;
+      const query = { _id: new ObjectId(postId) };
+      const option = { upsert: true };
+
+      if (voteDetails.vote_type === "upvote") {
+        const updateDoc = {
+          $push: { upvotes: { user_email: voteDetails.user_email } },
+        };
+        const result = await postCollection.updateOne(query, updateDoc, option);
+        return res.send(result);
+      } else if (voteDetails.vote_type === "downvote") {
+        const updateDoc = {
+          $push: { downvotes: { user_email: voteDetails.user_email } },
+        };
+        const result = await postCollection.updateOne(query, updateDoc, option);
+        return res.send(result);
+      }
+      res.send({
+        message: "Please provide a 'vote_type' property on the request object",
+      });
+    });
+
     // Comments related api
     app.get("/comments/:postId", async (req, res) => {
       const { postId } = req.params;
@@ -253,7 +283,6 @@ async function run() {
         .toArray();
       res.send(result);
     });
-
     app.post("/comments", verifyToken, async (req, res) => {
       const comment = req.body;
       const result = await commentCollection.insertOne(comment);
