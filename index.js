@@ -44,6 +44,9 @@ async function run() {
     const tagCollection = client.db("post-portal").collection("tags");
     const postCollection = client.db("post-portal").collection("posts");
     const commentCollection = client.db("post-portal").collection("comments");
+    const announcementCollection = client
+      .db("post-portal")
+      .collection("announcements");
 
     // middlewares
     const verifyToken = async (req, res, next) => {
@@ -87,8 +90,21 @@ async function run() {
 
     // Post Related Api
     app.get("/posts", async (req, res) => {
+      const { tags } = req.query;
+      let query = {};
+      if (tags) {
+        const tagsStrArr = tags?.split(",");
+        // const tagsIdObjArr = tagsIdStrArr.map((id) => new ObjectId(id));
+        query = {
+          selectedTags: { $in: tagsStrArr },
+        };
+      }
+
       const result = await postCollection
         .aggregate([
+          {
+            $match: query,
+          },
           // Extraticking the user
           {
             $addFields: {
@@ -149,6 +165,74 @@ async function run() {
         .toArray();
       res.send(result);
     });
+
+    app.get("/posts-sort-popularity", async (req, res) => {
+      const result = await postCollection
+        .aggregate([
+          // Extraticking the user
+          {
+            $addFields: {
+              user_id: { $toObjectId: "$user_id" },
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "user_id",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          {
+            $unwind: "$user",
+          },
+          // extracting selected tages
+          {
+            $unwind: "$selectedTags",
+          },
+          {
+            $addFields: {
+              selectedTags: { $toObjectId: "$selectedTags" },
+              // voteDifference: {
+              //   $subtract: [{ $size: "$upvotes" }, { $size: "$downvotes" }],
+              // },
+            },
+          },
+          {
+            $lookup: {
+              from: "tags",
+              localField: "selectedTags",
+              foreignField: "_id",
+              as: "selectedTags",
+            },
+          },
+          {
+            $unwind: "$selectedTags",
+          },
+          {
+            $group: {
+              _id: "$_id",
+              user_name: { $first: "$user_name" },
+              user_email: { $first: "$user_email" },
+              post_title: { $first: "$post_title" },
+              post_description: { $first: "$post_description" },
+              selectedTags: { $push: "$selectedTags" },
+              user_id: { $first: "$user_id" },
+              user: { $first: "$user" },
+              upvotes: { $first: "$upvotes" },
+              downvotes: { $first: "$downvotes" },
+              comments: { $first: "$comments" },
+              posted: { $first: "$posted" },
+            },
+          },
+          {
+            $sort: { posted: -1 },
+          },
+        ])
+        .toArray();
+      res.send(result);
+    });
+
     app.get("/post/:id", async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
@@ -319,7 +403,6 @@ async function run() {
 
     app.post("/users", async (req, res) => {
       const user = req.body;
-      console.log(user);
       const query = { email: user.email };
       const existingUser = await userCollection.findOne(query);
       if (existingUser) {
@@ -350,7 +433,16 @@ async function run() {
       res.send(result);
     });
 
-    // app.get("/user-by-name/:name", async())
+    // Announcement related api
+
+    app.post("/announcements", verifyToken, verifyAdmin, async (req, res) => {
+      const announcement = req.body;
+      const result = await announcementCollection.insertOne({
+        ...announcement,
+        timestamp: Date.now(),
+      });
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
