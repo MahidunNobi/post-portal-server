@@ -238,11 +238,6 @@ async function run() {
           {
             $match: query,
           },
-          // {
-          //   $addFields: {
-          //     user_id: { $toObjectId: "$user_id" },
-          //   },
-          // },
           {
             $lookup: {
               from: "users",
@@ -258,6 +253,7 @@ async function run() {
         .toArray();
       res.send(result);
     });
+
     app.post("/comments", verifyToken, async (req, res) => {
       const comment = req.body;
       const result = await commentCollection.insertOne(comment);
