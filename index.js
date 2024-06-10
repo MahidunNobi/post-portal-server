@@ -3,7 +3,7 @@ const cors = require("cors");
 const app = express();
 require("dotenv").config();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 
@@ -84,15 +84,7 @@ async function run() {
         .send({ success: true });
     });
 
-    // {
-    //   $lookup: {
-    //     from: "users",
-    //     localField: "user_id",
-    //     foreignField: "_id",
-    //     as: "user",
-    //   },
-    // },
-    // Posts Related api
+    // Post Related Api
     app.get("/posts", async (req, res) => {
       const result = await postCollection
         .aggregate([
@@ -150,6 +142,72 @@ async function run() {
           },
         ])
         .toArray();
+      res.send(result);
+    });
+
+    app.get("/post/:id", async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const result = await postCollection
+        .aggregate([
+          {
+            $match: query,
+          },
+          // Extraticking the user
+          {
+            $addFields: {
+              user_id: { $toObjectId: "$user_id" },
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "user_id",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          {
+            $unwind: "$user",
+          },
+          // extracting selected tages
+          {
+            $unwind: "$selectedTags",
+          },
+          {
+            $addFields: {
+              selectedTags: { $toObjectId: "$selectedTags" },
+            },
+          },
+          {
+            $lookup: {
+              from: "tags",
+              localField: "selectedTags",
+              foreignField: "_id",
+              as: "selectedTags",
+            },
+          },
+          {
+            $unwind: "$selectedTags",
+          },
+          {
+            $group: {
+              _id: "$_id",
+              user_name: { $first: "$user_name" },
+              user_email: { $first: "$user_email" },
+              post_title: { $first: "$post_title" },
+              post_description: { $first: "$post_description" },
+              selectedTags: { $push: "$selectedTags" },
+              user_id: { $first: "$user_id" },
+              user: { $first: "$user" },
+              votes: { $first: "$votes" },
+              comments: { $first: "$comments" },
+              posted: { $first: "$posted" },
+            },
+          },
+        ])
+        .toArray();
+
       res.send(result);
     });
 
