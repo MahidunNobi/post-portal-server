@@ -45,6 +45,7 @@ async function run() {
     const tagCollection = client.db("post-portal").collection("tags");
     const postCollection = client.db("post-portal").collection("posts");
     const commentCollection = client.db("post-portal").collection("comments");
+    const paymentCollection = client.db("post-portal").collection("payments");
     const announcementCollection = client
       .db("post-portal")
       .collection("announcements");
@@ -103,6 +104,23 @@ async function run() {
         },
       });
       res.send({ client_secret });
+    });
+
+    // Payments Related Api
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const result = await paymentCollection.insertOne({
+        ...payment,
+        timestamp: Date.now(),
+      });
+      const query = { email: payment.user_email };
+      const updateDoc = {
+        $set: {
+          subscription: "Gold",
+        },
+      };
+      const userRes = await userCollection.updateOne(query, updateDoc);
+      res.send(userRes);
     });
 
     // Post Related Api
