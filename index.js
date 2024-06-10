@@ -6,6 +6,7 @@ const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // middleware
 app.use(express.json());
@@ -86,6 +87,22 @@ async function run() {
       res
         .clearCookie("token", { ...cookieOption, maxAge: 0 })
         .send({ success: true });
+    });
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
+      const price = req.body.price;
+      const priceInCent = parseInt(price) * 100;
+
+      if (!price || priceInCent < 1) return;
+
+      // generate intnst
+      const { client_secret } = await stripe.paymentIntents.create({
+        amount: priceInCent,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+      res.send({ client_secret });
     });
 
     // Post Related Api
@@ -434,7 +451,14 @@ async function run() {
     });
 
     // Announcement related api
-
+    app.get("/announcements", async (req, res) => {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const result = await announcementCollection
+        .find({ timestamp: { $gte: sevenDaysAgo } })
+        .sort({ timestamp: -1 })
+        .toArray();
+      res.send(result);
+    });
     app.post("/announcements", verifyToken, verifyAdmin, async (req, res) => {
       const announcement = req.body;
       const result = await announcementCollection.insertOne({
