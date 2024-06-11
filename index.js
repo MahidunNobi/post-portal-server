@@ -53,13 +53,14 @@ async function run() {
     // middlewares
     const verifyToken = async (req, res, next) => {
       const token = req.cookies.token;
+      console.log(token);
       if (!token) {
-        return res.status(401).send({ message: "Unauthrized access!" });
+        return res.status(401).send({ message: "Unauthorized access!" });
       }
       jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
         if (err) {
           console.log(err);
-          return res.status(401).send({ message: "Unauthrized access!" });
+          return res.status(401).send({ message: "Unauthorized access!" });
         }
         req.user = decoded;
         next();
@@ -450,7 +451,7 @@ async function run() {
       });
       res.send(result);
     });
-    app.get("/user/:email", async (req, res) => {
+    app.get("/user/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const result = await userCollection.findOne({ email });
       res.send(result);
