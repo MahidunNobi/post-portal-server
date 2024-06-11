@@ -389,6 +389,12 @@ async function run() {
       const postResult = await postCollection.updateOne(query, updateDoc);
       res.send(result);
     });
+    app.get("/post-comments/:postId", async (req, res) => {
+      const postId = req.params.postId;
+      const query = { post_id: postId };
+      const result = await commentCollection.find(query).toArray();
+      res.send(result);
+    });
 
     // Tags related api
     app.get("/tags", async (req, res) => {
