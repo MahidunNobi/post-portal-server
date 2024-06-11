@@ -230,6 +230,13 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/posts/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const query = { user_email: email };
+      const result = await postCollection.find(query).toArray();
+      res.send(result);
+    });
+
     app.get("/posts-sort-popularity", async (req, res) => {
       const result = await postCollection
         .aggregate([
