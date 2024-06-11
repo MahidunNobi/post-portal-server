@@ -53,7 +53,6 @@ async function run() {
     // middlewares
     const verifyToken = async (req, res, next) => {
       const token = req.cookies.token;
-      console.log(token);
       if (!token) {
         return res.status(401).send({ message: "Unauthorized access!" });
       }
@@ -122,6 +121,35 @@ async function run() {
       };
       const userRes = await userCollection.updateOne(query, updateDoc);
       res.send(userRes);
+    });
+
+    // State related api
+    app.get("/user-state/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await postCollection
+        .aggregate([
+          {
+            $match: { user_email: email },
+          },
+          {
+            $addFields: {
+              totalVotes: {
+                $add: [{ $size: "$upvotes" }, { $size: "$downvotes" }],
+              },
+            },
+          },
+          {
+            $group: {
+              _id: "$user_name",
+              totalPost: { $sum: 1 },
+              totalComment: { $sum: { $size: "$comments" } },
+              totalVotes: { $sum: "$totalVotes" },
+            },
+          },
+        ])
+        .toArray();
+
+      res.send(result);
     });
 
     // Post Related Api
@@ -205,64 +233,8 @@ async function run() {
     app.get("/posts-sort-popularity", async (req, res) => {
       const result = await postCollection
         .aggregate([
-          // Extraticking the user
           {
-            $addFields: {
-              user_id: { $toObjectId: "$user_id" },
-            },
-          },
-          {
-            $lookup: {
-              from: "users",
-              localField: "user_id",
-              foreignField: "_id",
-              as: "user",
-            },
-          },
-          {
-            $unwind: "$user",
-          },
-          // extracting selected tages
-          {
-            $unwind: "$selectedTags",
-          },
-          {
-            $addFields: {
-              selectedTags: { $toObjectId: "$selectedTags" },
-              // voteDifference: {
-              //   $subtract: [{ $size: "$upvotes" }, { $size: "$downvotes" }],
-              // },
-            },
-          },
-          {
-            $lookup: {
-              from: "tags",
-              localField: "selectedTags",
-              foreignField: "_id",
-              as: "selectedTags",
-            },
-          },
-          {
-            $unwind: "$selectedTags",
-          },
-          {
-            $group: {
-              _id: "$_id",
-              user_name: { $first: "$user_name" },
-              user_email: { $first: "$user_email" },
-              post_title: { $first: "$post_title" },
-              post_description: { $first: "$post_description" },
-              selectedTags: { $push: "$selectedTags" },
-              user_id: { $first: "$user_id" },
-              user: { $first: "$user" },
-              upvotes: { $first: "$upvotes" },
-              downvotes: { $first: "$downvotes" },
-              comments: { $first: "$comments" },
-              posted: { $first: "$posted" },
-            },
-          },
-          {
-            $sort: { posted: -1 },
+            $addFields: {},
           },
         ])
         .toArray();
