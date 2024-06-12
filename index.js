@@ -372,7 +372,10 @@ async function run() {
     // Comments related api
     app.get("/comments/:postId", async (req, res) => {
       const { postId } = req.params;
-      const query = { post_id: postId };
+      const query = {
+        post_id: postId,
+        $or: [{ reported: { $exists: false } }, { reported: false }],
+      };
       const result = await commentCollection
         .aggregate([
           {
@@ -393,15 +396,15 @@ async function run() {
         .toArray();
       res.send(result);
     });
+
     app.post("/comments", verifyToken, async (req, res) => {
       const comment = req.body;
       const result = await commentCollection.insertOne(comment);
-
       // Saving the comment Id to the post collecetion
       const query = { _id: new ObjectId(comment.post_id) };
       const updateDoc = {
         $push: {
-          comments: result._id,
+          comments: result.insertedId,
         },
       };
       const postResult = await postCollection.updateOne(query, updateDoc);
@@ -409,7 +412,10 @@ async function run() {
     });
     app.get("/post-comments/:postId", async (req, res) => {
       const postId = req.params.postId;
-      const query = { post_id: postId };
+      const query = {
+        post_id: postId,
+        $or: [{ reported: { $exists: false } }, { reported: false }],
+      };
       const result = await commentCollection.find(query).toArray();
       res.send(result);
     });
@@ -463,6 +469,38 @@ async function run() {
       const result = await userCollection.updateOne(filter, updateDoc);
 
       res.send(result);
+    });
+
+    // Comment Report related Api
+    app.post("/report/:commentId", verifyToken, async (req, res) => {
+      const commentId = req.params.commentId;
+      const reqBody = req.body;
+
+      // Making the comment reported
+      const query = { _id: new ObjectId(commentId) };
+      const updateDoc = {
+        $set: reqBody,
+      };
+      const result = await commentCollection.updateOne(
+        query,
+        updateDoc
+        // option
+      );
+
+      // Removing the Id from the post
+      const comment = await commentCollection.findOne(query);
+
+      const postQuery = { _id: new ObjectId(comment.post_id) };
+      const updatePostComDoc = {
+        $pull: {
+          comments: new ObjectId(commentId),
+        },
+      };
+      const postResult = await postCollection.updateOne(
+        postQuery,
+        updatePostComDoc
+      );
+      res.send(postResult);
     });
 
     // Announcement related api
