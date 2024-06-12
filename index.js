@@ -414,7 +414,7 @@ async function run() {
       const postId = req.params.postId;
       const query = {
         post_id: postId,
-        $or: [{ reported: { $exists: false } }, { reported: false }],
+        // $or: [{ reported: { $exists: false } }, { reported: false }],
       };
       const result = await commentCollection.find(query).toArray();
       res.send(result);
@@ -436,6 +436,15 @@ async function run() {
       // }
       const cursor = userCollection.find();
       const result = await cursor.toArray();
+      res.send(result);
+    });
+    app.get("/users/:username", async (req, res) => {
+      const username = req.params.username;
+      const escapedKeyword = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const query = { name: { $regex: escapedKeyword, $options: "i" } };
+
+      const result = await userCollection.find(query).toArray();
+
       res.send(result);
     });
 
