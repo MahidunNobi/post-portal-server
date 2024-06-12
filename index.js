@@ -196,7 +196,6 @@ async function run() {
     });
 
     // Post Related Api
-
     app.get("/post-ability/:email", async (req, res) => {
       const email = req.params.email;
       const user = await userCollection.findOne({ email: email });
@@ -208,7 +207,9 @@ async function run() {
     });
 
     app.get("/posts", async (req, res) => {
-      const { tags } = req.query;
+      const { tags, page, itemsPerPage } = req.query;
+      const pageInt = parseInt(page) || 0;
+      const itemsPerPageInt = parseInt(itemsPerPage) || 0;
       let query = {};
       if (tags) {
         const tagsStrArr = tags?.split(",");
@@ -280,15 +281,37 @@ async function run() {
             $sort: { posted: -1 },
           },
         ])
+        .skip(pageInt * itemsPerPageInt)
+        .limit(itemsPerPageInt)
         .toArray();
       res.send(result);
     });
 
+    app.get("/postsCount", async (req, res) => {
+      const count = await postCollection.estimatedDocumentCount();
+      res.send({ count });
+    });
+
     app.get("/posts/:email", verifyToken, async (req, res) => {
+      const { page, itemsPerPage } = req.query;
+      const pageInt = parseInt(page) || 0;
+      const itemsPerPageInt = parseInt(itemsPerPage) || 0;
       const email = req.params.email;
       const query = { user_email: email };
-      const result = await postCollection.find(query).toArray();
+      const result = await postCollection
+        .find(query)
+        .skip(pageInt * itemsPerPageInt)
+        .limit(itemsPerPageInt)
+        .toArray();
       res.send(result);
+    });
+
+    app.get("/postsCount/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { user_email: email };
+      const count = await postCollection.estimatedDocumentCount();
+      console.log(email, count);
+      res.send({ count });
     });
 
     app.get("/posts-sort-popularity", async (req, res) => {
@@ -480,6 +503,9 @@ async function run() {
       verifyAdmin,
       async (req, res) => {
         const query = { reported: true };
+        const { page, itemsPerPage } = req.query;
+        const pageInt = parseInt(page) || 0;
+        const itemsPerPageInt = parseInt(itemsPerPage) || 0;
         const result = await commentCollection
           .aggregate([
             {
@@ -497,8 +523,20 @@ async function run() {
               $unwind: "$user",
             },
           ])
+          .skip(pageInt * itemsPerPageInt)
+          .limit(itemsPerPageInt)
           .toArray();
         res.send(result);
+      }
+    );
+    app.get(
+      "/reported-commentsCount",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const query = { reported: true };
+        const count = await commentCollection.countDocuments(query);
+        res.send({ count });
       }
     );
 
@@ -516,13 +554,29 @@ async function run() {
       res.send(result);
     });
     app.get("/post-comments/:postId", async (req, res) => {
+      const { page, itemsPerPage } = req.query;
+      const pageInt = parseInt(page) || 0;
+      const itemsPerPageInt = parseInt(itemsPerPage) || 0;
       const postId = req.params.postId;
       const query = {
         post_id: postId,
         // $or: [{ reported: { $exists: false } }, { reported: false }],
       };
-      const result = await commentCollection.find(query).toArray();
+      const result = await commentCollection
+        .find(query)
+        .skip(pageInt * itemsPerPageInt)
+        .limit(itemsPerPageInt)
+        .toArray();
       res.send(result);
+    });
+    app.get("/postsCommentsCount/:postId", async (req, res) => {
+      const postId = req.params.postId;
+      const query = {
+        post_id: postId,
+        $or: [{ reported: { $exists: false } }, { reported: false }],
+      };
+      const count = await commentCollection.countDocuments(query);
+      res.send({ count });
     });
 
     // Tags related api
@@ -530,6 +584,7 @@ async function run() {
       const result = await tagCollection.find().toArray();
       res.send(result);
     });
+
     app.post("/tags", verifyToken, verifyAdmin, async (req, res) => {
       const reqBody = req.body;
       const result = await tagCollection.insertOne({
@@ -542,15 +597,29 @@ async function run() {
     // User related api's
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const query = req.query;
+      const { page, itemsPerPage } = req.query;
+      const pageInt = parseInt(page) || 0;
+      const itemsPerPageInt = parseInt(itemsPerPage) || 0;
       // if (query) {
       //   const cursor = userCollection.find({ $text: { $search: query.name } });
       //   const result = await cursor.toArray();
       //   return res.send(result);
       // }
-      const cursor = userCollection.find();
-      const result = await cursor.toArray();
+      const result = await userCollection
+        .find()
+        .skip(pageInt * itemsPerPageInt)
+        .limit(itemsPerPageInt)
+        .toArray();
       res.send(result);
     });
+    app.get("/usersCount", verifyToken, verifyAdmin, async (req, res) => {
+      const query = req.query;
+
+      const count = await userCollection.estimatedDocumentCount();
+
+      res.send({ count });
+    });
+
     app.get("/users/:username", async (req, res) => {
       const username = req.params.username;
       const escapedKeyword = username.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
