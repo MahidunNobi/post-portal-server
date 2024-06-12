@@ -447,6 +447,33 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/comments-restore/:id", async (req, res) => {
+      const commentId = req.params.id;
+      // Update the comment collection
+      const query = { _id: new ObjectId(commentId) };
+      const updateDoc = {
+        $set: {
+          reported: false,
+          feedback: "",
+        },
+      };
+      const result = await commentCollection.updateOne(query, updateDoc);
+      // updating the post collection
+      const comment = await commentCollection.findOne(query);
+      const postQuery = { _id: new ObjectId(comment.post_id) };
+      const PostUpdateDoc = {
+        $push: {
+          comments: commentId,
+        },
+      };
+      const postresult = await postCollection.updateOne(
+        postQuery,
+        PostUpdateDoc
+      );
+
+      res.send(postresult);
+    });
+
     app.get(
       "/reported-comments",
       verifyToken,
