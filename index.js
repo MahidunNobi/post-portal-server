@@ -224,6 +224,19 @@ async function run() {
           {
             $match: query,
           },
+          // {
+          //   $addFields: {
+          //     upvotesCount: { $size: "$upvotes" },
+          //   },
+          // },
+          // {
+          //   $addFields: {
+          //     totalVotes: {
+          //       $add: [{ $size: "$upvotes" }, { $size: "$downvotes" }],
+          //     },
+          //   },
+          // },
+
           // Extraticking the user
           {
             $addFields: {
@@ -309,8 +322,7 @@ async function run() {
     app.get("/postsCount/:email", async (req, res) => {
       const email = req.params.email;
       const query = { user_email: email };
-      const count = await postCollection.estimatedDocumentCount();
-      console.log(email, count);
+      const count = await postCollection.countDocuments(query);
       res.send({ count });
     });
 
