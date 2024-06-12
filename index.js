@@ -151,6 +151,49 @@ async function run() {
 
       res.send(result);
     });
+    app.get("/admin-state/:email", async (req, res) => {
+      const email = req.params.email;
+      const postCount = await postCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalPosts: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+
+      const commentCount = await commentCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalComment: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+
+      const userCount = await userCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalUser: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+
+      const result = {
+        totalPosts: postCount[0].totalPosts,
+        totalComments: commentCount[0].totalComment,
+        totalUsers: userCount[0].totalUser,
+      };
+
+      res.send(result);
+    });
 
     // Post Related Api
 
@@ -423,6 +466,14 @@ async function run() {
     // Tags related api
     app.get("/tags", async (req, res) => {
       const result = await tagCollection.find().toArray();
+      res.send(result);
+    });
+    app.post("/tags", verifyToken, verifyAdmin, async (req, res) => {
+      const reqBody = req.body;
+      const result = await tagCollection.insertOne({
+        name: reqBody.tag,
+        image: reqBody.tag_icon_url,
+      });
       res.send(result);
     });
 
