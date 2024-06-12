@@ -440,6 +440,41 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/comments/:id", async (req, res) => {
+      const commentId = req.params.id;
+      const query = { _id: new ObjectId(commentId) };
+      const result = await commentCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.get(
+      "/reported-comments",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const query = { reported: true };
+        const result = await commentCollection
+          .aggregate([
+            {
+              $match: query,
+            },
+            {
+              $lookup: {
+                from: "users",
+                localField: "user_email",
+                foreignField: "email",
+                as: "user",
+              },
+            },
+            {
+              $unwind: "$user",
+            },
+          ])
+          .toArray();
+        res.send(result);
+      }
+    );
+
     app.post("/comments", verifyToken, async (req, res) => {
       const comment = req.body;
       const result = await commentCollection.insertOne(comment);
