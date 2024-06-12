@@ -153,6 +153,17 @@ async function run() {
     });
 
     // Post Related Api
+
+    app.get("/post-ability/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await userCollection.findOne({ email: email });
+      const posts = await postCollection.find({ user_email: email }).toArray();
+      if (user.subscription === "Bronze" && posts.length >= 5) {
+        return res.send({ status: false });
+      }
+      res.send({ status: true });
+    });
+
     app.get("/posts", async (req, res) => {
       const { tags } = req.query;
       let query = {};
