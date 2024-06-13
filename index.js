@@ -12,7 +12,7 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", "https://post-portal-1b855.web.app"],
     credentials: true,
   })
 );
@@ -39,7 +39,7 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const userCollection = client.db("post-portal").collection("users");
     const tagCollection = client.db("post-portal").collection("tags");
@@ -207,7 +207,7 @@ async function run() {
     });
 
     app.get("/posts", async (req, res) => {
-      const { tags, page, itemsPerPage } = req.query;
+      const { tags, page, itemsPerPage, sortByPopularity } = req.query;
       const pageInt = parseInt(page) || 0;
       const itemsPerPageInt = parseInt(itemsPerPage) || 0;
       let query = {};
@@ -218,85 +218,169 @@ async function run() {
           selectedTags: { $in: tagsStrArr },
         };
       }
+      let result = [];
+      if (sortByPopularity === "true") {
+        result = await postCollection
+          .aggregate([
+            {
+              $match: query,
+            },
+            // Getting the vote difference.
+            {
+              $addFields: {
+                totalVotes: {
+                  $subtract: [
+                    {
+                      $cond: {
+                        if: { $isArray: "$upvotes" },
+                        then: { $size: "$upvotes" },
+                        else: 0,
+                      },
+                    },
+                    {
+                      $cond: {
+                        if: { $isArray: "$downvotes" },
+                        then: { $size: "$downvotes" },
+                        else: 0,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
 
-      const result = await postCollection
-        .aggregate([
-          {
-            $match: query,
-          },
-          // {
-          //   $addFields: {
-          //     upvotesCount: { $size: "$upvotes" },
-          //   },
-          // },
-          // {
-          //   $addFields: {
-          //     totalVotes: {
-          //       $add: [{ $size: "$upvotes" }, { $size: "$downvotes" }],
-          //     },
-          //   },
-          // },
+            // Populating the User
+            {
+              $addFields: {
+                user_id: { $toObjectId: "$user_id" },
+              },
+            },
+            {
+              $lookup: {
+                from: "users",
+                localField: "user_id",
+                foreignField: "_id",
+                as: "user",
+              },
+            },
+            {
+              $unwind: "$user",
+            },
 
-          // Extraticking the user
-          {
-            $addFields: {
-              user_id: { $toObjectId: "$user_id" },
+            // Populating Selected Tages
+            {
+              $unwind: "$selectedTags",
             },
-          },
-          {
-            $lookup: {
-              from: "users",
-              localField: "user_id",
-              foreignField: "_id",
-              as: "user",
+            {
+              $addFields: {
+                selectedTags: { $toObjectId: "$selectedTags" },
+              },
             },
-          },
-          {
-            $unwind: "$user",
-          },
-          // extracting selected tages
-          {
-            $unwind: "$selectedTags",
-          },
-          {
-            $addFields: {
-              selectedTags: { $toObjectId: "$selectedTags" },
+            {
+              $lookup: {
+                from: "tags",
+                localField: "selectedTags",
+                foreignField: "_id",
+                as: "selectedTags",
+              },
             },
-          },
-          {
-            $lookup: {
-              from: "tags",
-              localField: "selectedTags",
-              foreignField: "_id",
-              as: "selectedTags",
+            {
+              $unwind: "$selectedTags",
             },
-          },
-          {
-            $unwind: "$selectedTags",
-          },
-          {
-            $group: {
-              _id: "$_id",
-              user_name: { $first: "$user_name" },
-              user_email: { $first: "$user_email" },
-              post_title: { $first: "$post_title" },
-              post_description: { $first: "$post_description" },
-              selectedTags: { $push: "$selectedTags" },
-              user_id: { $first: "$user_id" },
-              user: { $first: "$user" },
-              upvotes: { $first: "$upvotes" },
-              downvotes: { $first: "$downvotes" },
-              comments: { $first: "$comments" },
-              posted: { $first: "$posted" },
+            // Groping and sorting
+            {
+              $group: {
+                _id: "$_id",
+                user_name: { $first: "$user_name" },
+                user_email: { $first: "$user_email" },
+                post_title: { $first: "$post_title" },
+                post_description: { $first: "$post_description" },
+                selectedTags: { $push: "$selectedTags" },
+                user_id: { $first: "$user_id" },
+                user: { $first: "$user" },
+                upvotes: { $first: "$upvotes" },
+                downvotes: { $first: "$downvotes" },
+                totalVotes: { $first: "$totalVotes" },
+                comments: { $first: "$comments" },
+                posted: { $first: "$posted" },
+              },
             },
-          },
-          {
-            $sort: { posted: -1 },
-          },
-        ])
-        .skip(pageInt * itemsPerPageInt)
-        .limit(itemsPerPageInt)
-        .toArray();
+            {
+              $sort: { totalVotes: -1 },
+            },
+          ])
+          .skip(pageInt * itemsPerPageInt)
+          .limit(itemsPerPageInt)
+          .toArray();
+      } else {
+        result = await postCollection
+          .aggregate([
+            {
+              $match: query,
+            },
+
+            // Extraticking the user
+            {
+              $addFields: {
+                user_id: { $toObjectId: "$user_id" },
+              },
+            },
+            {
+              $lookup: {
+                from: "users",
+                localField: "user_id",
+                foreignField: "_id",
+                as: "user",
+              },
+            },
+            {
+              $unwind: "$user",
+            },
+            // extracting selected tages
+            {
+              $unwind: "$selectedTags",
+            },
+            {
+              $addFields: {
+                selectedTags: { $toObjectId: "$selectedTags" },
+              },
+            },
+            {
+              $lookup: {
+                from: "tags",
+                localField: "selectedTags",
+                foreignField: "_id",
+                as: "selectedTags",
+              },
+            },
+            {
+              $unwind: "$selectedTags",
+            },
+            {
+              $group: {
+                _id: "$_id",
+                user_name: { $first: "$user_name" },
+                user_email: { $first: "$user_email" },
+                post_title: { $first: "$post_title" },
+                post_description: { $first: "$post_description" },
+                selectedTags: { $push: "$selectedTags" },
+                user_id: { $first: "$user_id" },
+                user: { $first: "$user" },
+                upvotes: { $first: "$upvotes" },
+                downvotes: { $first: "$downvotes" },
+                comments: { $first: "$comments" },
+                posted: { $first: "$posted" },
+              },
+            },
+            {
+              $sort: { posted: -1 },
+            },
+          ])
+          .skip(pageInt * itemsPerPageInt)
+          .limit(itemsPerPageInt)
+          .toArray();
+      }
+
       res.send(result);
     });
 
@@ -327,12 +411,98 @@ async function run() {
     });
 
     app.get("/posts-sort-popularity", async (req, res) => {
+      const { page, itemsPerPage } = req.query;
+      console.log(page, itemsPerPage);
+      const pageInt = parseInt(page) || 0;
+      const itemsPerPageInt = parseInt(itemsPerPage) || 0;
       const result = await postCollection
         .aggregate([
+          // Getting the vote difference.
           {
-            $addFields: {},
+            $addFields: {
+              totalVotes: {
+                $subtract: [
+                  {
+                    $cond: {
+                      if: { $isArray: "$upvotes" },
+                      then: { $size: "$upvotes" },
+                      else: 0,
+                    },
+                  },
+                  {
+                    $cond: {
+                      if: { $isArray: "$downvotes" },
+                      then: { $size: "$downvotes" },
+                      else: 0,
+                    },
+                  },
+                ],
+              },
+            },
+          },
+
+          // Populating the User
+          {
+            $addFields: {
+              user_id: { $toObjectId: "$user_id" },
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "user_id",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          {
+            $unwind: "$user",
+          },
+
+          // Populating Selected Tages
+          {
+            $unwind: "$selectedTags",
+          },
+          {
+            $addFields: {
+              selectedTags: { $toObjectId: "$selectedTags" },
+            },
+          },
+          {
+            $lookup: {
+              from: "tags",
+              localField: "selectedTags",
+              foreignField: "_id",
+              as: "selectedTags",
+            },
+          },
+          {
+            $unwind: "$selectedTags",
+          },
+          // Groping and sorting
+          {
+            $group: {
+              _id: "$_id",
+              user_name: { $first: "$user_name" },
+              user_email: { $first: "$user_email" },
+              post_title: { $first: "$post_title" },
+              post_description: { $first: "$post_description" },
+              selectedTags: { $push: "$selectedTags" },
+              user_id: { $first: "$user_id" },
+              user: { $first: "$user" },
+              upvotes: { $first: "$upvotes" },
+              downvotes: { $first: "$downvotes" },
+              totalVotes: { $first: "$totalVotes" },
+              comments: { $first: "$comments" },
+              posted: { $first: "$posted" },
+            },
+          },
+          {
+            $sort: { totalVotes: -1 },
           },
         ])
+        .skip(pageInt * itemsPerPageInt)
+        .limit(itemsPerPageInt)
         .toArray();
       res.send(result);
     });
@@ -541,6 +711,7 @@ async function run() {
         res.send(result);
       }
     );
+
     app.get(
       "/reported-commentsCount",
       verifyToken,
@@ -585,7 +756,7 @@ async function run() {
       const postId = req.params.postId;
       const query = {
         post_id: postId,
-        $or: [{ reported: { $exists: false } }, { reported: false }],
+        // $or: [{ reported: { $exists: false } }, { reported: false }],
       };
       const count = await commentCollection.countDocuments(query);
       res.send({ count });
@@ -725,10 +896,10 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
