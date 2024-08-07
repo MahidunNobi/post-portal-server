@@ -12,7 +12,11 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://post-portal-1b855.web.app"],
+    origin: [
+      "http://localhost:5173",
+      "https://post-portal-1b855.web.app",
+      "https://post-portal48454.netlify.app",
+    ],
     credentials: true,
   })
 );
