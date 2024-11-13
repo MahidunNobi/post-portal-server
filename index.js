@@ -6,6 +6,8 @@ const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const verifyToken = require("./middlewares/verifyToken");
+const verifyAdmin = require("./middlewares/verifyAdmin");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // middleware
@@ -55,30 +57,6 @@ async function run() {
       .collection("announcements");
 
     // middlewares
-    const verifyToken = async (req, res, next) => {
-      const token = req.cookies.token;
-      if (!token) {
-        return res.status(401).send({ message: "Unauthorized access!" });
-      }
-      jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-        if (err) {
-          console.log(err);
-          return res.status(401).send({ message: "Unauthorized access!" });
-        }
-        req.user = decoded;
-        next();
-      });
-    };
-
-    const verifyAdmin = async (req, res, next) => {
-      const user = req.user;
-      const query = { email: user?.email };
-      const userResult = await userCollection.findOne(query);
-      if (!userResult || userResult.role !== "admin") {
-        return res.status(401).send({ message: "Unauthorized access!" });
-      }
-      next();
-    };
 
     // jwt related token
     app.post("/jwt", async (req, res) => {
@@ -88,11 +66,13 @@ async function run() {
       });
       res.cookie("token", token, cookieOption).send({ succcess: true });
     });
+
     app.get("/logout", (req, res) => {
       res
         .clearCookie("token", { ...cookieOption, maxAge: 0 })
         .send({ success: true });
     });
+
     app.post("/create-payment-intent", verifyToken, async (req, res) => {
       const price = req.body.price;
       const priceInCent = parseInt(price) * 100;
