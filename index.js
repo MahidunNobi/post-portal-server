@@ -52,11 +52,34 @@ async function run() {
     const postCollection = client.db("post-portal").collection("posts");
     const commentCollection = client.db("post-portal").collection("comments");
     const paymentCollection = client.db("post-portal").collection("payments");
+    const surveysCollection = client.db("post-portal").collection("surveys");
+    const surveyOptionsCollection = client
+      .db("post-portal")
+      .collection("survey_options");
+    const surveyVotesCollection = client
+      .db("post-portal")
+      .collection("survey_votes");
     const announcementCollection = client
       .db("post-portal")
       .collection("announcements");
 
-    // middlewares
+    // Survey related APIS
+    app.post("/survey", verifyToken, async (req, res) => {
+      const survey = req.body;
+      const user = await userCollection.findOne({ email: survey.user_email });
+      const options = await surveyOptionsCollection.insertMany(survey.options);
+      const finalSurvey = {
+        user: user._id,
+        survey_title: survey.survey_title,
+        survey_desc: survey.survey_desc,
+        options: Object.values(options.insertedIds),
+        start_date: Date.now(),
+        end_date: Date.now() + 24 * 60 * 60 * 1000,
+      };
+      const result = await surveysCollection.insertOne(finalSurvey);
+
+      res.send({ success: true, message: "Survey Created", data: result });
+    });
 
     // jwt related token
     app.post("/jwt", async (req, res) => {
