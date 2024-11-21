@@ -120,12 +120,37 @@ async function run() {
       // Saving the vote
       const finalVote = {
         user: user._id,
-        survey: vote.survey_id,
-        option: vote.option_id,
+        survey: new ObjectId(vote.survey_id),
+        option: new ObjectId(vote.option_id),
       };
       const result = await surveyVotesCollection.insertOne(finalVote);
 
       res.send({ success: true, message: "Survey Created", data: result });
+    });
+    app.post("/vote-availability", verifyToken, async (req, res) => {
+      const vote = req.body;
+      const user = await userCollection.findOne({ email: req.user.email });
+
+      const result = await surveyVotesCollection
+        .aggregate([
+          {
+            $match: {
+              user: user._id,
+              survey: new ObjectId(vote.survey_id),
+            },
+          },
+          {
+            $lookup: {
+              from: "survey_options",
+              localField: "option",
+              foreignField: "_id",
+              as: "option",
+            },
+          },
+        ])
+        .toArray();
+
+      res.send({ success: true, message: "Vote found", data: result });
     });
 
     // jwt related token
