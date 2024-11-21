@@ -97,6 +97,23 @@ async function run() {
 
       res.send(result);
     });
+    app.get("/surveys", async (req, res) => {
+      const result = await surveysCollection
+        .aggregate([
+          // { $match: { end_date: { $gte: Date.now() } } },
+          {
+            $lookup: {
+              from: "survey_options",
+              localField: "options",
+              foreignField: "_id",
+              as: "options",
+            },
+          },
+        ])
+        .toArray();
+
+      res.send(result);
+    });
     app.post("/survey-vote", verifyToken, async (req, res) => {
       const vote = req.body;
       const user = await userCollection.findOne({ email: req.user.email });
