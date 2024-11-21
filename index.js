@@ -97,6 +97,36 @@ async function run() {
 
       res.send(result);
     });
+    app.post("/survey-vote", verifyToken, async (req, res) => {
+      const vote = req.body;
+      const user = await userCollection.findOne({ email: req.user.email });
+
+      // Inserting the user to the survey first
+      const surRes = await surveysCollection.findOneAndUpdate(
+        { _id: new ObjectId(vote.survey_id) },
+        { $addToSet: { voters: user._id } }
+      );
+
+      // Increasing the vote count in the Option Document
+      const opRes = await surveyOptionsCollection.findOneAndUpdate(
+        { _id: new ObjectId(vote.option_id) },
+        {
+          $inc: { votes: 1 },
+          // $setOnInsert: { votes: 1 },
+        },
+        { upsert: true, returnDocument: "after" }
+      );
+
+      // Saving the vote
+      const finalVote = {
+        user: user._id,
+        survey: vote.survey_id,
+        option: vote.option_id,
+      };
+      const result = await surveyVotesCollection.insertOne(finalVote);
+
+      res.send({ success: true, message: "Survey Created", data: result });
+    });
 
     // jwt related token
     app.post("/jwt", async (req, res) => {
